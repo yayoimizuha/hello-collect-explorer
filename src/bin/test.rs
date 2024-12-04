@@ -31,8 +31,8 @@ impl OricalContainer {
         let user_desc = client.get("https://api-helloproject.orical.jp/partner_users?partner_id=13")
             .header(reqwest::header::AUTHORIZATION.to_string(), secure_token.clone()).send().await.unwrap().json::<Value>().await.unwrap();
         let user_id = user_desc["user_id"].as_i64().unwrap();
-        let screen_name = user_desc["screen_name"].as_str().unwrap().to_string();
         let orical_id = user_desc["orica"]["id"].as_i64().unwrap();
+        let screen_name = user_desc["screen_name"].as_str().unwrap().to_string();
 
         OricalContainer { custom_token, secure_token, user_id, orical_id, screen_name }
     }
@@ -43,6 +43,11 @@ impl OricalContainer {
     //         .header(reqwest::header::AUTHORIZATION.to_string(), self.secure_token.clone(),
     //         ).send().await.unwrap().json::<Value>().await.unwrap()
     // }
+    async fn card_counts(&self) -> HashMap<i64, (i64, i64)> {
+        let client = reqwest::Client::new();
+        client.get(format!("https://api-helloproject.orical.jp/card_users/count_by_stars?partner_id=13&screen_name={0}", self.screen_name)).send().await.unwrap().json::<Value>().await.unwrap()
+            .as_array().unwrap().iter().enumerate().map(|(i, v)| (i as i64 + 1, (v["total"].as_i64().unwrap(), v["count"].as_i64().unwrap()))).collect()
+    }
 }
 // https://api-helloproject.orical.jp/card_users/count_by_stars?partner_id=13&screen_name=yayoi_mizuha
 #[tokio::main]
@@ -54,4 +59,5 @@ async fn main() {
     let orical_container = OricalContainer::new(login_id).await;
 
     // println!("has bonus?: {}", orical_container.has_bonus().await);
+    println!("{:?}", orical_container.card_counts().await);
 }
