@@ -2,7 +2,6 @@ use once_cell::sync::OnceCell;
 use std::collections::HashMap;
 use std::fs;
 use reqwest;
-use reqwest::header::{HeaderMap};
 use serde_json::Value;
 
 static ACCESS_TOKEN: OnceCell<String> = OnceCell::new();
