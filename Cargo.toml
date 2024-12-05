@@ -12,3 +12,4 @@ cached = { version = "*", features = ["default", "async", "async_tokio_rt_multi_
 tokio = { version = "*", features = ["default"] }
 serde_json = { version = "*", features = ["default"] }
 once_cell = { version = "*", features = ["default"] }
+serde = { version = "1.0.215", features = ["derive"] }
