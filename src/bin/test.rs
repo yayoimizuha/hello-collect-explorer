@@ -50,6 +50,15 @@ struct CardContainer {
     frontimage_thumbnail: String,
 }
 
+impl CardContainer {
+    fn member_id(&self) -> i64 {
+        match self.card_type {
+            CardType::Person(_) => { self.person_id.unwrap() }
+            CardType::Unit(_) => { self.unit_id.unwrap() }
+        }
+    }
+}
+
 impl OricalUserContainer {
     async fn get_secure_token(custom_token: String) -> String {
         eprintln!("getting secure token...");
@@ -149,6 +158,8 @@ impl OricalUserContainer {
         }
         card_list
     }
+
+    // async fn own_tickets(&self, user_id: i64) -> HashMap<i64, (i64, i64)> {}
 }
 
 #[tokio::main]
@@ -186,9 +197,10 @@ async fn main() {
 
     let all_users_count = client.get(format!("https://api-helloproject.orical.jp/partners/{PARTNER_ID}/ranking/top100?page=1&per=1")).send().await.unwrap().json::<Value>().await.unwrap()["my_rank"]["num_rivals"].as_i64().unwrap();
     println!("{}", all_users_count);
-    let all_users_count = 200_i64;
-    for i in 0..=(all_users_count as f64 / 100.0).ceil() as i32 {
-        for rank in client.get(format!("https://api-helloproject.orical.jp/partners/{PARTNER_ID}/ranking/top100?page={i}&per=100")).send().await.unwrap().json::<Value>().await.unwrap()["rankings"].as_array().unwrap() {
+    let ranking_chunk = 4;
+    let all_users_count = 5008_i64;
+    for i in 1250..=(all_users_count as f64 / ranking_chunk as f64).ceil() as i32 {
+        for rank in client.get(format!("https://api-helloproject.orical.jp/partners/{PARTNER_ID}/ranking/top100?page={i}&per={ranking_chunk}")).send().await.unwrap().json::<Value>().await.unwrap()["rankings"].as_array().unwrap() {
             let screen_name = rank["partner_user"]["screen_name"].as_str().unwrap();
             let user_id = rank["partner_user"]["user_id"].as_i64().unwrap();
             println!("{}位\tuser_id:{user_id}\tscreen_name:{screen_name:<15}\tscore:{:<7}\tcollect:{}\ttotal:{}",
@@ -196,13 +208,15 @@ async fn main() {
                      rank["score"].as_i64().unwrap(),
                      rank["partner_user"]["collect"].as_i64().unwrap(),
                      rank["partner_user"]["total_cards_amount"].as_i64().unwrap());
-            // let user = OricalUserContainer::new(orical_container.custom_token.clone(), orical_container.secure_token.clone(), Some(user_id), None).await;
-            // for (rarity, cards) in user.card_listing().await {
-            //     println!("\t星{rarity}");
-            //     for card in cards {
-            //         println!("\t\t{:?}",card.card_type);
-            //     }
-            // }
+            let user = OricalUserContainer::new(orical_container.custom_token.clone(), orical_container.secure_token.clone(), Some(user_id), None).await;
+            let mut cards_map = user.card_listing().await.into_iter().collect::<Vec<_>>();
+            cards_map.sort_by_key(|x| -x.0);
+            for (rarity, cards) in cards_map {
+                println!("\t星{rarity}");
+                for card in cards {
+                    println!("\t\t{:?} - {} - {}", card.card_type, card.member_id(), card.name);
+                }
+            }
         }
     }
 
