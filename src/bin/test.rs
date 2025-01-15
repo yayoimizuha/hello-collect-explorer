@@ -80,7 +80,7 @@ struct CardPackContainer {
 impl CardPackContainer {
     async fn from_card_pack_id(pack_id: i32) -> CardPackContainer {
         let client = Client::new();
-        let mut cards_set = HashSet::new();
+        // let mut cards_set = HashSet::new();
         let mut page = 1;
         loop {
             let cards = client.get(format!("https://api-helloproject.orical.jp/cards/index_by_cardpacks?partner_id={PARTNER_ID}&cardpack_id={pack_id}&page={page}&per=25"))

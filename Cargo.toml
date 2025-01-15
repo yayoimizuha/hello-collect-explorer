@@ -9,10 +9,10 @@ edition = "2021"
 actix-web = { version = "*", features = ["default", "compress-zstd"] }
 reqwest = { version = "*", features = ["default", "cookies", "json"] }
 cached = { version = "*", features = ["default", "async", "async_tokio_rt_multi_thread", "tokio"] }
-tokio = { version = "*", features = ["default"] }
+tokio = { version = "*", features = ["full"] }
 serde_json = { version = "*", features = ["default"] }
 once_cell = { version = "*", features = ["default"] }
 serde = { version = "1.0.215", features = ["derive"] }
 chrono = { version = "*", features = ["default"] }
 
-sqlx = { version = "*", features = ["mysql", "default"] }
+sqlx = { version = "*", features = ["mysql", "default", "runtime-tokio","chrono"] }
