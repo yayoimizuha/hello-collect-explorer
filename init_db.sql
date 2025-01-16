@@ -8,6 +8,16 @@ CREATE TABLE IF NOT EXISTS orical_user
     frontal_card_ids TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_user_id ON orical_user (user_id);
+
+CREATE TABLE IF NOT EXISTS characters
+(
+    character_id   INT PRIMARY KEY,
+    unit_name      TEXT NULL,
+    unit_member_id INT  NULL,
+    person_name    TEXT NULL,
+    person_image   TEXT NULL
+);
+
 CREATE TABLE IF NOT EXISTS cards
 (
     card_id              INT PRIMARY KEY,
@@ -18,21 +28,17 @@ CREATE TABLE IF NOT EXISTS cards
     character_id         INT                     NOT NULL,
     season_id            INT                     NOT NULL,
     frontimage           TEXT,
-    frontimage_thumbnail TEXT
+    frontimage_thumbnail TEXT,
+    FOREIGN KEY fk_character_id (character_id) REFERENCES characters (character_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_card_id ON cards (card_id);
 CREATE INDEX IF NOT EXISTS idx_character_id ON cards (character_id);
 CREATE TABLE IF NOT EXISTS belong
 (
     user_id   INT PRIMARY KEY,
+    card_id   INT          NOT NULL,
     amount    INT UNSIGNED NOT NULL,
-    protected BOOL         NOT NULL
-);
-CREATE TABLE IF NOT EXISTS characters
-(
-    character_id   INT PRIMARY KEY,
-    unit_name      TEXT NULL,
-    unit_member_id INT  NULL,
-    person_name    TEXT NULL,
-    person_image   TEXT NULL
+    protected BOOL         NOT NULL,
+    FOREIGN KEY fk_user_id (user_id) REFERENCES orical_user (user_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY fk_card_id (card_id) REFERENCES cards (card_id) ON DELETE CASCADE ON UPDATE CASCADE
 );

@@ -15,6 +15,7 @@ static LOGIN_ID: Lazy<HashMap<String, String>> = Lazy::new(|| {
     }).collect()
 });
 static DATABASE_POOL: OnceCell<Pool<MySql>> = OnceCell::const_new();
+static PARTNER_ID: i32 = 13;
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -30,6 +31,7 @@ async fn main() {
         info!("{query};");
     }
     info!("login id: {:?}",*LOGIN_ID);
+    update_orical_user().await;
 }
 #[tracing::instrument]
 async fn generate_client(authorized: bool) -> reqwest::Client {
@@ -51,4 +53,8 @@ async fn generate_client(authorized: bool) -> reqwest::Client {
     }
 }
 #[tracing::instrument]
-async fn update_orical_user() {}
+async fn update_orical_user() {
+    let client = generate_client(true).await;
+    let all_users_count = client.get(format!("https://api-helloproject.orical.jp/partners/{PARTNER_ID}/ranking/top100?page=1&per=1")).send().await.unwrap().json::<Value>().await.unwrap()["my_rank"]["num_rivals"].as_i64().unwrap();
+
+}
