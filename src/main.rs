@@ -56,5 +56,5 @@ async fn generate_client(authorized: bool) -> reqwest::Client {
 async fn update_orical_user() {
     let client = generate_client(true).await;
     let all_users_count = client.get(format!("https://api-helloproject.orical.jp/partners/{PARTNER_ID}/ranking/top100?page=1&per=1")).send().await.unwrap().json::<Value>().await.unwrap()["my_rank"]["num_rivals"].as_i64().unwrap();
-
+    info!("all_users_count: {all_users_count}");
 }
