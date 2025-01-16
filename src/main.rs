@@ -1,6 +1,7 @@
 use cached::proc_macro::cached;
 use std::collections::HashMap;
 use std::fs;
+use chrono::DateTime;
 use once_cell::sync::Lazy;
 use tokio::sync::OnceCell;
 use serde_json::Value;
@@ -28,10 +29,11 @@ async fn main() {
     DATABASE_POOL.set(MySqlPoolOptions::new().connect(env!("DATABASE_URL")).await.unwrap()).unwrap();
     for query in include_str!("../init_db.sql").strip_suffix(";").unwrap().split(';') {
         sqlx::query(&format!("{query};")).execute(DATABASE_POOL.get().unwrap()).await.unwrap();
-        info!("{query};");
+        debug!("{query};");
     }
-    info!("login id: {:?}",*LOGIN_ID);
-    update_orical_user().await;
+    debug!("login id: {:?}",*LOGIN_ID);
+    // update_orical_user().await;
+    update_cardpacks().await;
 }
 #[tracing::instrument]
 async fn generate_client(authorized: bool) -> reqwest::Client {
@@ -54,7 +56,69 @@ async fn generate_client(authorized: bool) -> reqwest::Client {
 }
 #[tracing::instrument]
 async fn update_orical_user() {
+    let chunk_size = 100;
     let client = generate_client(true).await;
     let all_users_count = client.get(format!("https://api-helloproject.orical.jp/partners/{PARTNER_ID}/ranking/top100?page=1&per=1")).send().await.unwrap().json::<Value>().await.unwrap()["my_rank"]["num_rivals"].as_i64().unwrap();
-    info!("all_users_count: {all_users_count}");
+    debug!("all_users_count: {all_users_count}");
+    // let all_users_count = 5000_i64;
+    let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
+    sqlx::query("TRUNCATE TABLE orical_user").execute(&mut *begin).await.unwrap();
+    for i in 1..=(all_users_count as f64 / chunk_size as f64).ceil() as i32 {
+        for person_data in client.get(format!("https://api-helloproject.orical.jp/partners/{PARTNER_ID}/ranking/top100?page={i}&per={chunk_size}")).send().await.unwrap().json::<Value>().await.unwrap()["rankings"].as_array().unwrap() {
+            // debug!("Rank: {person_data}");
+            let screen_name = person_data["partner_user"]["screen_name"].as_str().unwrap();
+            let user_id = person_data["partner_user"]["user_id"].as_i64().unwrap();
+            let orical_id = person_data["partner_user"]["orica"]["id"].as_i64().unwrap();
+            let comment = person_data["partner_user"]["orica"]["comment"].as_str().unwrap_or_else(|| { "" });
+            let frontal_card_ids = match person_data["partner_user"]["orica"].get("card_ids") {
+                Some(x) => { x.as_array().unwrap().iter().map(|v| format!("{}", v.as_i64().unwrap())).collect::<Vec<_>>().join(",") }
+                None => { "".to_string() }
+            };
+            debug!("screen_name: {screen_name}");
+            debug!("\tuser_id: {user_id}");
+            debug!("\torical_id: {orical_id}");
+            debug!("\tcomment: {comment}");
+            debug!("\tfrontal_card_ids: {frontal_card_ids}");
+            sqlx::query("INSERT INTO orical_user(user_id,orical_id,screen_name,comment,frontal_card_ids) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE user_id = ?;")
+                .bind(user_id).bind(orical_id).bind(screen_name).bind(comment).bind(frontal_card_ids).bind(user_id).execute(&mut *begin).await.unwrap();
+        }
+    }
+    begin.commit().await.unwrap();
+}
+
+#[tracing::instrument]
+async fn update_cardpacks() {
+    let chunk_size = 25;
+    let client = generate_client(true).await;
+
+    let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
+    sqlx::query("TRUNCATE TABLE cardpacks").execute(&mut *begin).await.unwrap();
+
+    let mut page = 1;
+    loop {
+        let resp = client.get(
+            format!("https://api-helloproject.orical.jp/cardpacks?partner_id={PARTNER_ID}&page={page}&per={chunk_size}&return_closed=true&order=available_at"))
+            .send().await.unwrap().json::<Value>().await.unwrap();
+        let cardpack_array = resp.as_array().unwrap();
+        for cardpack in cardpack_array {
+            let name = cardpack["name"].as_str().unwrap();
+            let description = cardpack["description"].as_str().unwrap();
+            let id = cardpack["id"].as_i64().unwrap();
+            let available_at = DateTime::parse_from_rfc3339(cardpack["available_at"].as_str().unwrap()).unwrap();
+            let closes_at = DateTime::parse_from_rfc3339(cardpack["closes_at"].as_str().unwrap()).unwrap();
+
+            sqlx::query("INSERT INTO cardpacks(cardpack_id,name,description,available_at,closes_at) VALUES (?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE cardpack_id = ?;")
+                .bind(id).bind(name).bind(description).bind(available_at.naive_local()).bind(closes_at.naive_local()).bind(id).execute(&mut *begin).await.unwrap();
+
+
+            debug!("name: {}", name);
+            debug!("\tdescription: {}", description);
+            debug!("\tid: {}", id);
+            debug!("\tavailable_at: {}", available_at);
+            debug!("\tcloses_at: {}", closes_at);
+        }
+        page += 1;
+        if cardpack_array.len() != chunk_size { break; }
+    }
+    begin.commit().await.unwrap();
 }
