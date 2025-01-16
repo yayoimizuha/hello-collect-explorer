@@ -14,5 +14,6 @@ serde_json = { version = "*", features = ["default"] }
 once_cell = { version = "*", features = ["default"] }
 serde = { version = "1.0.215", features = ["derive"] }
 chrono = { version = "*", features = ["default"] }
-
-sqlx = { version = "*", features = ["mysql", "default", "runtime-tokio","chrono"] }
+tracing = { version = "*", features = ["default"] }
+tracing-subscriber = { version = "*", features = ["default", "env-filter"] }
+sqlx = { version = "*", features = ["mysql", "default", "runtime-tokio", "chrono"] }

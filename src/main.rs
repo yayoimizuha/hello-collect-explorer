@@ -1,19 +1,54 @@
+use cached::proc_macro::cached;
+use std::collections::HashMap;
+use std::fs;
+use once_cell::sync::Lazy;
+use tokio::sync::OnceCell;
+use serde_json::Value;
 use sqlx::{mysql::MySqlPoolOptions, MySql, Pool};
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::prelude::*;
+use tracing::{error, info, debug, warn};
 
+static LOGIN_ID: Lazy<HashMap<String, String>> = Lazy::new(|| {
+    serde_json::from_str::<Value>(include_str!("../login_info.json")).unwrap().as_object().unwrap().iter().map(|(k, v)| {
+        (k.clone(), v.clone().as_str().unwrap().to_string())
+    }).collect()
+});
+static DATABASE_POOL: OnceCell<Pool<MySql>> = OnceCell::const_new();
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "info".into()),
+        )
+        .with(tracing_subscriber::fmt::layer()).init();
     println!(env!("DATABASE_URL"));
-    let database_pool = MySqlPoolOptions::new().connect(env!("DATABASE_URL")).await.unwrap();
-    sqlx::query("CREATE TABLE IF NOT EXISTS orical_user(user_id INT PRIMARY KEY, orical_id INT NOT NULL, season_id INT NOT NULL, screen_name TEXT NOT NULL);").execute(&database_pool).await.unwrap();
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_user_id ON orical_user(user_id);").execute(&database_pool).await.unwrap();
-    sqlx::query(
-        "CREATE TABLE IF NOT EXISTS cards(card_id INT PRIMARY KEY, name TEXT NULL, description TEXT NULL, rarity INT NOT NULL,\
-                                             card_type ENUM('unit', 'person') NOT NULL,character_id INT NOT NULL, season_id INT NOT NULL,\
-                                             frontimage TEXT,frontimage_thumbnail TEXT);"
-    ).execute(&database_pool).await.unwrap();
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_card_id ON cards(card_id);").execute(&database_pool).await.unwrap();
-    sqlx::query("CREATE INDEX IF NOT EXISTS idx_character_id ON cards(character_id);").execute(&database_pool).await.unwrap();
-    sqlx::query("CREATE TABLE IF NOT EXISTS belong(user_id INT PRIMARY KEY, amount INT UNSIGNED NOT NULL, protected BOOL NOT NULL);").execute(&database_pool).await.unwrap();
-    sqlx::query("CREATE TABLE IF NOT EXISTS character(character_id INT PRIMARY KEY,amount INT UNSIGNED NOT NULL);").execute(&database_pool).await.unwrap();
-
+    DATABASE_POOL.set(MySqlPoolOptions::new().connect(env!("DATABASE_URL")).await.unwrap()).unwrap();
+    for query in include_str!("../init_db.sql").strip_suffix(";").unwrap().split(';') {
+        sqlx::query(&format!("{query};")).execute(DATABASE_POOL.get().unwrap()).await.unwrap();
+        info!("{query};");
+    }
+    info!("login id: {:?}",*LOGIN_ID);
 }
+#[tracing::instrument]
+async fn generate_client(authorized: bool) -> reqwest::Client {
+    #[cached(time = 900)]
+    async fn generate_secure_token() -> String {
+        let client = reqwest::Client::new();
+        let custom_token = client.post("https://account-api.orical.jp/firebase_user/generate_custom_token?idprovider_key=helloproject_id").
+            json(&*LOGIN_ID).send().await.unwrap().json::<Value>().await.unwrap()["custom_token"].as_str().unwrap().to_string();
+        client.post("https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=AIzaSyABJQ_1lLpugYT2kuzdCsRmcx0P8QRG16s").
+            json(&HashMap::from([("token", custom_token), ("returnSecureToken", "true".to_string())])).send().await.unwrap().json::<Value>().await.unwrap()["idToken"].as_str().unwrap().to_string()
+    }
+    if !authorized {
+        reqwest::Client::new()
+    } else {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::AUTHORIZATION, reqwest::header::HeaderValue::from_str(&*generate_secure_token().await).unwrap());
+        headers.get_mut(reqwest::header::AUTHORIZATION).unwrap().set_sensitive(true);
+        reqwest::Client::builder().default_headers(headers).build().unwrap()
+    }
+}
+#[tracing::instrument]
+async fn update_orical_user() {}
