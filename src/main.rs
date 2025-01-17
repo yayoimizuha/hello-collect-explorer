@@ -34,6 +34,7 @@ async fn main() {
     debug!("login id: {:?}",*LOGIN_ID);
     // update_orical_user().await;
     update_cardpacks().await;
+    update_cards().await;
 }
 #[tracing::instrument]
 async fn generate_client(authorized: bool) -> reqwest::Client {
@@ -96,9 +97,8 @@ async fn update_cardpacks() {
 
     let mut page = 1;
     loop {
-        let resp = client.get(
-            format!("https://api-helloproject.orical.jp/cardpacks?partner_id={PARTNER_ID}&page={page}&per={chunk_size}&return_closed=true&order=available_at"))
-            .send().await.unwrap().json::<Value>().await.unwrap();
+        let query = format!("https://api-helloproject.orical.jp/cardpacks?partner_id={PARTNER_ID}&page={page}&per={chunk_size}&return_closed=true&order=available_at");
+        let resp = client.get(query).send().await.unwrap().json::<Value>().await.unwrap();
         let cardpack_array = resp.as_array().unwrap();
         for cardpack in cardpack_array {
             let name = cardpack["name"].as_str().unwrap();
@@ -121,4 +121,43 @@ async fn update_cardpacks() {
         if cardpack_array.len() != chunk_size { break; }
     }
     begin.commit().await.unwrap();
+}
+
+#[tracing::instrument]
+async fn update_cards() {
+    let cardpack_ids = sqlx::query_as::<_, (i64,)>("SELECT cardpack_id FROM cardpacks;")
+        .fetch_all(DATABASE_POOL.get().unwrap()).await.unwrap().into_iter().map(|v| { v.0 }).collect::<Vec<_>>();
+
+    let chunk_size = 25;
+    let client = generate_client(false).await;
+
+    let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
+    sqlx::query("TRUNCATE TABLE cards;").execute(&mut *begin).await.unwrap();
+
+    for cardpack_id in cardpack_ids {
+        let mut page = 1;
+        loop {
+            let query = format!("https://api-helloproject.orical.jp/cards/index_by_cardpacks?partner_id={PARTNER_ID}&cardpack_id={cardpack_id}&page={page}&per={chunk_size}");
+            let resp = client.get(query).send().await.unwrap().json::<Value>().await.unwrap();
+            let card_array = resp.as_array().unwrap();
+            for card in card_array {
+                debug!("card id: {}", card["id"].as_i64().unwrap());
+                debug!("\tcardpack_id: {}", card["cardpacks"].as_array().unwrap().iter().next().unwrap()["id"].as_i64().unwrap());
+                debug!("\trarity: {}", card["rarity"].as_i64().unwrap());
+                debug!("\tcard_type: {}",match card["person_id"].as_i64(){
+                    Some(_) => {"person"},
+                    None => {"unit"}
+                });
+                debug!("\tcharacter_id: {}",match card["person_id"].as_i64(){
+                    Some(x) => {x},
+                    None => {card["unit_id"].as_i64().unwrap()}
+                });
+                debug!("\tseason_id: {}", card["season_id"].as_i64().unwrap());
+                debug!("\tfrontimage: {}", card["frontimage"].as_str().unwrap());
+                debug!("\tfrontimage_thumbnail: {}", card["frontimage_thumbnail"].as_str().unwrap());
+            }
+            page += 1;
+            if card_array.len() != chunk_size { break; }
+        }
+    }
 }
