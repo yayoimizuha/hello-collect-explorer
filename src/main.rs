@@ -233,7 +233,6 @@ async fn update_cards() {
 
 #[tracing::instrument(skip(semaphore))]
 async fn update_card_belong(user_id: i64, semaphore: Arc<Semaphore>) {
-    if user_id < 14800 { return; }
     let _permit = semaphore.acquire().await.unwrap();
     info!("start updating card affiliation: {}...",user_id);
     let chunk_size = 25;
