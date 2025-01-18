@@ -17,3 +17,8 @@ chrono = { version = "*", features = ["default"] }
 tracing = { version = "*", features = ["default"] }
 tracing-subscriber = { version = "*", features = ["default", "env-filter"] }
 sqlx = { version = "*", features = ["mysql", "default", "runtime-tokio", "chrono"] }
+futures = { version = "*", features = ["default"] }
+
+[profile.relwithdebinfo]
+inherits = "release"
+debug = true
