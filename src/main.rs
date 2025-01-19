@@ -1,6 +1,5 @@
 use cached::proc_macro::cached;
 use std::collections::HashMap;
-use std::fs;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,7 +12,7 @@ use sqlx::{mysql::MySqlPoolOptions, MySql, Pool};
 use tokio::time::sleep;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::prelude::*;
-use tracing::{error, info, debug, warn};
+use tracing::{info, debug, warn};
 
 static LOGIN_ID: Lazy<HashMap<String, String>> = Lazy::new(|| {
     serde_json::from_str::<Value>(include_str!("../login_info.json")).unwrap().as_object().unwrap().iter().map(|(k, v)| {
