@@ -37,15 +37,18 @@ async fn main() {
         debug!("{query};");
     }
     debug!("login id: {:?}",*LOGIN_ID);
-    update_orical_user().await;
-    update_cardpacks().await;
-    update_cards().await;
+    loop {
+        update_orical_user().await;
+        update_cardpacks().await;
+        update_cards().await;
 
-    let semaphore = Arc::new(Semaphore::new(3));
-    let futures = list_users().await.into_iter().map(|id| {
-        update_card_belong(id, semaphore.clone())
-    }).collect::<Vec<_>>();
-    future::join_all(futures).await;
+        let semaphore = Arc::new(Semaphore::new(1));
+        let suspend = Duration::new(0, 5e+8 as u32);
+        let futures = list_users().await.into_iter().map(|id| {
+            update_card_belong(id, semaphore.clone(), suspend)
+        }).collect::<Vec<_>>();
+        future::join_all(futures).await;
+    }
 }
 #[tracing::instrument]
 async fn generate_client(authorized: bool) -> reqwest::Client {
@@ -232,7 +235,7 @@ async fn update_cards() {
 
 
 #[tracing::instrument(skip(semaphore))]
-async fn update_card_belong(user_id: i64, semaphore: Arc<Semaphore>) {
+async fn update_card_belong(user_id: i64, semaphore: Arc<Semaphore>, suspend: Duration) {
     let _permit = semaphore.acquire().await.unwrap();
     info!("start updating card affiliation: {}...",user_id);
     let chunk_size = 25;
@@ -251,6 +254,7 @@ async fn update_card_belong(user_id: i64, semaphore: Arc<Semaphore>) {
         for rarity in 1..=5 {
             let mut page = 1;
             loop {
+                sleep(suspend).await;
                 let query = format!("https://api-helloproject.orical.jp/cards?partner_id={PARTNER_ID}&user_id={user_id}&card_type={card_type}&ownership_type=owned&rarity={rarity}&page={page}&per={chunk_size}");
                 let mut retry_val = 6;
                 let resp = loop {
