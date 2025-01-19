@@ -301,6 +301,7 @@ async fn list_users() -> Vec<i64> {
         .fetch_all(DATABASE_POOL.get().unwrap()).await.unwrap().into_iter().map(|v| { v.0 }).collect::<Vec<_>>()
 }
 
+#[allow(dead_code)]
 async fn run_with_async_fn<F, Fut>(async_fn: F, semaphore: Arc<Semaphore>) -> Fut
 where
     F: Fn() -> Fut,
