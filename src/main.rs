@@ -42,7 +42,7 @@ async fn main() {
         update_cardpacks().await;
         update_cards().await;
 
-        let semaphore = Arc::new(Semaphore::new(1));
+        let semaphore = Arc::new(Semaphore::new(4));
         let suspend = Duration::new(0, 5e+8 as u32);
         let futures = list_users().await.into_iter().map(|id| {
             update_card_belong(id, semaphore.clone(), suspend)
@@ -234,7 +234,7 @@ async fn update_cards() {
 }
 
 
-#[tracing::instrument(skip(semaphore))]
+#[tracing::instrument(skip(semaphore, suspend))]
 async fn update_card_belong(user_id: i64, semaphore: Arc<Semaphore>, suspend: Duration) {
     let _permit = semaphore.acquire().await.unwrap();
     info!("start updating card affiliation: {}...",user_id);
