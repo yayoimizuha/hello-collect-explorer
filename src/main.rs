@@ -12,7 +12,7 @@ use sqlx::{mysql::MySqlPoolOptions, MySql, Pool};
 use tokio::time::sleep;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::prelude::*;
-use tracing::{info, debug, warn};
+use tracing::{error, info, debug, warn};
 
 static LOGIN_ID: Lazy<HashMap<String, String>> = Lazy::new(|| {
     serde_json::from_str::<Value>(include_str!("../login_info.json")).unwrap().as_object().unwrap().iter().map(|(k, v)| {
@@ -246,9 +246,15 @@ async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Se
     if sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM belong WHERE user_id = ?;").bind(user_id).fetch_one(DATABASE_POOL.get().unwrap()).await.unwrap().0 != 0 {
         sqlx::query("SELECT * FROM belong WHERE user_id = ? FOR UPDATE;").bind(user_id)
             .execute(&mut *begin).await.unwrap();
-        sqlx::query("DELETE FROM belong WHERE user_id = ?;").bind(user_id)
-            .execute(&mut *begin).await.unwrap();
     }
+    match sqlx::query("DELETE FROM belong WHERE user_id = ?;").bind(user_id)
+        .execute(&mut *begin).await {
+        Ok(_) => {}
+        Err(err) => {
+            error!("sqlx::error={:?}",err);
+            return;
+        }
+    };
 
     for card_type in ["memorial", "non_memorial"] {
         // for rarity in 1..=5 {
@@ -269,14 +275,44 @@ async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Se
                 }
                 if retry_val == 0 { panic!() }
             };
-            let card_array = resp.as_array().unwrap();
+            let card_array = match resp.as_array() {
+                None => {
+                    error!("resp={:?}",resp);
+                    return;
+                }
+                Some(x) => { x }
+            };
             debug!(query);
             for card in card_array {
                 // let stat = card["card_users"].as_array().unwrap().iter().next().unwrap();
-                let card_id = card["card_id"].as_i64().unwrap();
-                let is_protected = card["is_protected"].as_bool().unwrap();
-                let unique_id = card["id"].as_i64().unwrap();
-                let amount = card["amount"].as_u64().unwrap();
+                let card_id = match card["card_id"].as_i64() {
+                    None => {
+                        error!("{:?}",card);
+                        continue;
+                    }
+                    Some(x) => { x }
+                };
+                let is_protected = match card["is_protected"].as_bool() {
+                    None => {
+                        error!("{:?}",card);
+                        continue;
+                    }
+                    Some(x) => { x }
+                };
+                let unique_id = match card["id"].as_i64() {
+                    None => {
+                        error!("{:?}",card);
+                        continue;
+                    }
+                    Some(x) => { x }
+                };
+                let amount = match card["amount"].as_u64() {
+                    None => {
+                        error!("{:?}",card);
+                        continue;
+                    }
+                    Some(x) => { x }
+                };
 
                 debug!("card id: {}", card_id);
                 // debug!("\tstat: {}", stat);
@@ -285,9 +321,15 @@ async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Se
                 debug!("\tamount: {}", amount);
 
 
-                sqlx::query("INSERT belong(user_id, card_id, unique_id, amount, protected) VALUES(?, ?, ?, ?, ?);")
+                match sqlx::query("INSERT belong(user_id, card_id, unique_id, amount, protected) VALUES(?, ?, ?, ?, ?);")
                     .bind(user_id).bind(card_id).bind(unique_id).bind(amount).bind(is_protected)
-                    .execute(&mut *begin).await.unwrap();
+                    .execute(&mut *begin).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        error!("sqlx::error={:?}",err);
+                        continue;
+                    }
+                };
             }
             page += 1;
             if card_array.len() != chunk_size { break; }
