@@ -47,7 +47,7 @@ async fn main() {
             update_card_belong(id, screen_name, semaphore.clone(), suspend)
         }).collect::<Vec<_>>();
         future::join_all(futures).await;
-        break;
+        // break;
     }
 }
 #[tracing::instrument]
