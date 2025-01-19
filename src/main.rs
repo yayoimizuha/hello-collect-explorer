@@ -42,11 +42,12 @@ async fn main() {
         update_cards().await;
 
         let semaphore = Arc::new(Semaphore::new(4));
-        let suspend = Duration::new(0, 5e+8 as u32);
-        let futures = list_users().await.into_iter().map(|id| {
-            update_card_belong(id, semaphore.clone(), suspend)
+        let suspend = Duration::new(0, 5e+7 as u32);
+        let futures = list_users().await.into_iter().map(|(id, screen_name)| {
+            update_card_belong(id, screen_name, semaphore.clone(), suspend)
         }).collect::<Vec<_>>();
         future::join_all(futures).await;
+        break;
     }
 }
 #[tracing::instrument]
@@ -234,7 +235,7 @@ async fn update_cards() {
 
 
 #[tracing::instrument(skip(semaphore, suspend))]
-async fn update_card_belong(user_id: i64, semaphore: Arc<Semaphore>, suspend: Duration) {
+async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Semaphore>, suspend: Duration) {
     let _permit = semaphore.acquire().await.unwrap();
     info!("start updating card affiliation: {}...",user_id);
     let chunk_size = 25;
@@ -250,55 +251,57 @@ async fn update_card_belong(user_id: i64, semaphore: Arc<Semaphore>, suspend: Du
     }
 
     for card_type in ["memorial", "non_memorial"] {
-        for rarity in 1..=5 {
-            let mut page = 1;
-            loop {
-                sleep(suspend).await;
-                let query = format!("https://api-helloproject.orical.jp/cards?partner_id={PARTNER_ID}&user_id={user_id}&card_type={card_type}&ownership_type=owned&rarity={rarity}&page={page}&per={chunk_size}");
-                let mut retry_val = 6;
-                let resp = loop {
-                    match client.get(&query).send().await.unwrap().json::<Value>().await {
-                        Ok(x) => { break x; }
-                        Err(_) => {
-                            retry_val -= 1;
-                            warn!("retrying...: {}",query);
-                            sleep(Duration::new(30, 0)).await;
-                        }
+        // for rarity in 1..=5 {
+        let mut page = 1;
+        loop {
+            sleep(suspend).await;
+            // let query = format!("https://api-helloproject.orical.jp/cards?partner_id={PARTNER_ID}&user_id={user_id}&card_type={card_type}&ownership_type=owned&rarity={rarity}&page={page}&per={chunk_size}");
+            let query = format!("https://api-helloproject.orical.jp/card_users?page={page}&per={chunk_size}&partner_id={PARTNER_ID}&screen_name={screen_name}&card_type={card_type}&order=created_at");
+            let mut retry_val = 6;
+            let resp = loop {
+                match client.get(&query).send().await.unwrap().json::<Value>().await {
+                    Ok(x) => { break x; }
+                    Err(_) => {
+                        retry_val -= 1;
+                        warn!("retrying...: {}",query);
+                        sleep(Duration::new(30, 0)).await;
                     }
-                    if retry_val == 0 { panic!() }
-                };
-                let card_array = resp.as_array().unwrap();
-                debug!(query);
-                for card in card_array {
-                    let stat = card["card_users"].as_array().unwrap().iter().next().unwrap();
-                    let card_id = stat["card_id"].as_i64().unwrap();
-                    let is_protected = stat["is_protected"].as_bool().unwrap();
-                    let unique_id = stat["id"].as_i64().unwrap();
-                    let amount = stat["amount"].as_u64().unwrap();
-
-                    debug!("card id: {}", card_id);
-                    // debug!("\tstat: {}", stat);
-                    debug!("\tis_protected: {}", is_protected);
-                    debug!("\tunique_id: {}", unique_id);
-                    debug!("\tamount: {}", amount);
-
-
-                    sqlx::query("INSERT belong(user_id, card_id, unique_id, amount, protected) VALUES(?, ?, ?, ?, ?);")
-                        .bind(user_id).bind(card_id).bind(unique_id).bind(amount).bind(is_protected)
-                        .execute(&mut *begin).await.unwrap();
                 }
-                page += 1;
-                if card_array.len() != chunk_size { break; }
+                if retry_val == 0 { panic!() }
+            };
+            let card_array = resp.as_array().unwrap();
+            debug!(query);
+            for card in card_array {
+                // let stat = card["card_users"].as_array().unwrap().iter().next().unwrap();
+                let card_id = card["card_id"].as_i64().unwrap();
+                let is_protected = card["is_protected"].as_bool().unwrap();
+                let unique_id = card["id"].as_i64().unwrap();
+                let amount = card["amount"].as_u64().unwrap();
+
+                debug!("card id: {}", card_id);
+                // debug!("\tstat: {}", stat);
+                debug!("\tis_protected: {}", is_protected);
+                debug!("\tunique_id: {}", unique_id);
+                debug!("\tamount: {}", amount);
+
+
+                sqlx::query("INSERT belong(user_id, card_id, unique_id, amount, protected) VALUES(?, ?, ?, ?, ?);")
+                    .bind(user_id).bind(card_id).bind(unique_id).bind(amount).bind(is_protected)
+                    .execute(&mut *begin).await.unwrap();
             }
+            page += 1;
+            if card_array.len() != chunk_size { break; }
         }
+        // }
     }
     begin.commit().await.unwrap();
     info!("end updating card affiliation: {}...",user_id);
 }
 
-async fn list_users() -> Vec<i64> {
-    sqlx::query_as::<_, (i64,)>("SELECT user_id FROM orical_user;")
-        .fetch_all(DATABASE_POOL.get().unwrap()).await.unwrap().into_iter().map(|v| { v.0 }).collect::<Vec<_>>()
+async fn list_users() -> Vec<(i64, String)> {
+    // return vec![(6, "harurio".into())];
+    sqlx::query_as::<_, (i64, String)>("SELECT user_id,screen_name FROM orical_user ORDER BY user_id;")
+        .fetch_all(DATABASE_POOL.get().unwrap()).await.unwrap().into_iter().map(|v| { v }).collect::<Vec<_>>()
 }
 
 #[allow(dead_code)]
