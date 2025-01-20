@@ -44,7 +44,9 @@ async fn main() {
         let semaphore = Arc::new(Semaphore::new(4));
         let suspend = Duration::new(0, 5e+7 as u32);
         let futures = list_users().await.into_iter().map(|(id, screen_name)| {
-            update_card_belong(id, screen_name, semaphore.clone(), suspend)
+            let resp = update_card_belong(id, screen_name.clone(), semaphore.clone(), suspend);
+            if id % 1000 == 0 { info!(id,screen_name); }
+            resp
         }).collect::<Vec<_>>();
         future::join_all(futures).await;
         // break;
@@ -237,7 +239,7 @@ async fn update_cards() {
 #[tracing::instrument(skip(semaphore, suspend))]
 async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Semaphore>, suspend: Duration) {
     let _permit = semaphore.acquire().await.unwrap();
-    info!("start updating card affiliation: {}...",user_id);
+    debug!("start updating card affiliation: {}...",user_id);
     let chunk_size = 25;
     let client = generate_client(false).await;
 
@@ -337,7 +339,7 @@ async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Se
         // }
     }
     begin.commit().await.unwrap();
-    info!("end updating card affiliation: {}...",user_id);
+    debug!("end updating card affiliation: {}...",user_id);
 }
 
 async fn list_users() -> Vec<(i64, String)> {
