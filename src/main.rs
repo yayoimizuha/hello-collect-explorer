@@ -12,7 +12,7 @@ use sqlx::{mysql::MySqlPoolOptions, MySql, Pool};
 use tokio::time::sleep;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::prelude::*;
-use tracing::{error, info, debug, warn};
+use tracing::{error, info, debug, warn, enabled, Level};
 
 static LOGIN_ID: Lazy<HashMap<String, String>> = Lazy::new(|| {
     serde_json::from_str::<Value>(include_str!("../login_info.json")).unwrap().as_object().unwrap().iter().map(|(k, v)| {
@@ -44,9 +44,7 @@ async fn main() {
         let semaphore = Arc::new(Semaphore::new(4));
         let suspend = Duration::new(0, 5e+7 as u32);
         let futures = list_users().await.into_iter().map(|(id, screen_name)| {
-            let resp = update_card_belong(id, screen_name.clone(), semaphore.clone(), suspend);
-            if id % 1000 == 0 { info!(id,screen_name); }
-            resp
+            update_card_belong(id, screen_name.clone(), semaphore.clone(), suspend)
         }).collect::<Vec<_>>();
         future::join_all(futures).await;
         // break;
@@ -239,7 +237,8 @@ async fn update_cards() {
 #[tracing::instrument(skip(semaphore, suspend))]
 async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Semaphore>, suspend: Duration) {
     let _permit = semaphore.acquire().await.unwrap();
-    debug!("start updating card affiliation: {}...",user_id);
+    if user_id % 1000 == 0 || enabled!(Level::DEBUG) { info!("start updating card affiliation: {}...",user_id); }
+
     let chunk_size = 25;
     let client = generate_client(false).await;
 
@@ -339,7 +338,10 @@ async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Se
         // }
     }
     begin.commit().await.unwrap();
-    debug!("end updating card affiliation: {}...",user_id);
+
+    if enabled!(Level::DEBUG) {
+        info!("end updating card affiliation: {}...",user_id);
+    };
 }
 
 async fn list_users() -> Vec<(i64, String)> {
