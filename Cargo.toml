@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-actix-web = { version = "4.9.0", features = ["default", "compress-zstd"] }
+#actix-web = { version = "4.9.0", features = ["default", "compress-zstd"] }
 reqwest = { version = "0.12.12", features = ["default", "cookies", "json"] }
 cached = { version = "0.54.0", features = ["default", "async", "async_tokio_rt_multi_thread", "tokio"] }
 tokio = { version = "1.43.0", features = ["full"] }
