@@ -31,6 +31,13 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer()).init();
     println!(env!("DATABASE_URL"));
     DATABASE_POOL.set(MySqlPoolOptions::new().max_connections(500).connect(env!("DATABASE_URL")).await.unwrap()).unwrap();
+
+    for (index_name, table_name) in sqlx::query_as::<_, (String, String)>(
+        "SELECT INDEX_NAME, TABLE_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = 'hello_collect_explorer' AND INDEX_NAME != 'PRIMARY';"
+    ).fetch_all(DATABASE_POOL.get().unwrap()).await.unwrap() {
+        sqlx::query(format!("DROP INDEX {index_name} ON {table_name};").as_str()).execute(DATABASE_POOL.get().unwrap()).await.unwrap();
+    }
+
     for query in include_str!("../init_db.sql").strip_suffix(";").unwrap().split(';') {
         sqlx::query(&format!("{query};")).execute(DATABASE_POOL.get().unwrap()).await.unwrap();
         debug!("{query};");
