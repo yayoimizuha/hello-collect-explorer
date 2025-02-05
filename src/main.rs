@@ -35,8 +35,8 @@ async fn main() {
     for (index_name, table_name) in sqlx::query_as::<_, (String, String)>(
         "SELECT INDEX_NAME, TABLE_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = 'hello_collect_explorer' AND INDEX_NAME != 'PRIMARY';"
     ).fetch_all(DATABASE_POOL.get().unwrap()).await.unwrap() {
-        println!("{}", format!("DROP INDEX {index_name} ON {table_name};"));
-        sqlx::query(format!("DROP INDEX {index_name} ON {table_name};").as_str()).execute(DATABASE_POOL.get().unwrap()).await.unwrap();
+        println!("{}", format!("DROP INDEX IF EXISTS {index_name} ON {table_name};"));
+        sqlx::query(format!("DROP INDEX IF EXISTS {index_name} ON {table_name};").as_str()).execute(DATABASE_POOL.get().unwrap()).await.unwrap();
     }
 
 
