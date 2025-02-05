@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS orical_user
     comment          TEXT,
     frontal_card_ids TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_orical_user_id ON orical_user (user_id);
+# CREATE INDEX IF NOT EXISTS idx_orical_user_id ON orical_user (user_id);
 CREATE INDEX IF NOT EXISTS idx_orical_user_screen_name ON orical_user (user_id, screen_name);
 
 CREATE TABLE IF NOT EXISTS characters
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS cards
     frontimage_thumbnail TEXT
 #     ,FOREIGN KEY fk_character_id (character_id) REFERENCES characters (character_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_card_id ON cards (card_id);
+# CREATE INDEX IF NOT EXISTS idx_card_id ON cards (card_id);
 CREATE INDEX IF NOT EXISTS idx_character_id ON cards (character_id);
 CREATE INDEX IF NOT EXISTS idx_cards_character_id_memorial ON cards (memorial, rarity);
 
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS belong
 #     ,FOREIGN KEY fk_card_id (card_id) REFERENCES cards (card_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_belong_user_id ON belong (user_id);
-CREATE INDEX IF NOT EXISTS idx_belong_user_card_id ON belong (user_id, card_id);
+# CREATE INDEX IF NOT EXISTS idx_belong_user_card_id ON belong (user_id, card_id);
 
 CREATE TABLE IF NOT EXISTS cardpack_belong
 (
