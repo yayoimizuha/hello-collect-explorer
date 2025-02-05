@@ -270,7 +270,7 @@ async fn update_cards() {
 
 
 #[tracing::instrument(skip(semaphore, suspend))]
-async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Semaphore>, suspend: Duration) -> Vec<(i64, i64, bool, i64, u64)> {
+async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Semaphore>, suspend: Duration) -> Vec<(i64, i64, i64, u64, bool)> {
     let _permit = semaphore.acquire().await.unwrap();
     if user_id % 1000 == 0 || enabled!(Level::DEBUG) { info!("start updating card affiliation: {}...",user_id); }
 
@@ -357,7 +357,7 @@ async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Se
                 debug!("\tis_protected: {}", is_protected);
                 debug!("\tunique_id: {}", unique_id);
                 debug!("\tamount: {}", amount);
-                hold_cards.push((user_id, card_id, is_protected, unique_id, amount));
+                hold_cards.push((user_id, card_id, unique_id, amount, is_protected));
 
 
                 // match sqlx::query("INSERT belong(user_id, card_id, unique_id, amount, protected) VALUES(?, ?, ?, ?, ?);")
