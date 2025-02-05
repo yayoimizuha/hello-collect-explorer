@@ -63,7 +63,7 @@ async fn main() {
                     .execute(&mut *begin).await {
                     Ok(_) => {}
                     Err(err) => {
-                        error!("sqlx::error={:?}",err);
+                        error!("sqlx::error=DELETE {:?}",err);
                         return;
                     }
                 };
@@ -73,7 +73,7 @@ async fn main() {
                         .execute(&mut *begin).await {
                         Ok(_) => {}
                         Err(err) => {
-                            error!("sqlx::error={:?}",err);
+                            error!("sqlx::error=INSERT {:?}",err);
                             continue;
                         }
                     };
