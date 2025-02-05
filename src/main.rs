@@ -257,6 +257,9 @@ async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Se
         sqlx::query("SELECT * FROM belong WHERE user_id = ? FOR UPDATE;").bind(user_id)
             .execute(&mut *begin).await.unwrap();
     }
+    begin.commit().await.unwrap();
+    let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
+
     match sqlx::query("DELETE FROM belong WHERE user_id = ?;").bind(user_id)
         .execute(&mut *begin).await {
         Ok(_) => {}
