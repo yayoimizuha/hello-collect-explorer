@@ -253,10 +253,10 @@ async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Se
 
     let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
     // sqlx::query("TRUNCATE TABLE cards;").execute(&mut *begin).await.unwrap();
-    // if sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM belong WHERE user_id = ?;").bind(user_id).fetch_one(DATABASE_POOL.get().unwrap()).await.unwrap().0 != 0 {
-    //     sqlx::query("SELECT * FROM belong WHERE user_id = ? FOR UPDATE;").bind(user_id)
-    //         .execute(&mut *begin).await.unwrap();
-    // }
+    if sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM belong WHERE user_id = ?;").bind(user_id).fetch_one(DATABASE_POOL.get().unwrap()).await.unwrap().0 != 0 {
+        sqlx::query("SELECT * FROM belong WHERE user_id = ? FOR UPDATE;").bind(user_id)
+            .execute(&mut *begin).await.unwrap();
+    }
     match sqlx::query("DELETE FROM belong WHERE user_id = ?;").bind(user_id)
         .execute(&mut *begin).await {
         Ok(_) => {}
