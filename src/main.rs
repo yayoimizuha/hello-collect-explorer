@@ -4,11 +4,11 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use chrono::DateTime;
-use futures::future;
 use once_cell::sync::Lazy;
 use tokio::sync::{OnceCell, Semaphore};
 use serde_json::Value;
 use sqlx::{mysql::MySqlPoolOptions, MySql, Pool};
+use tokio::join;
 use tokio::time::sleep;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::prelude::*;
@@ -52,10 +52,36 @@ async fn main() {
 
         let semaphore = Arc::new(Semaphore::new(4));
         let suspend = Duration::new(0, 5e+7 as u32);
-        let futures = list_users().await.into_iter().map(|(id, screen_name)| {
+        let joiner = list_users().await.into_iter().map(|(id, screen_name)| {
             update_card_belong(id, screen_name.clone(), semaphore.clone(), suspend)
         }).collect::<Vec<_>>();
-        future::join_all(futures).await;
+        for a_values in joiner {
+            let values = join!(a_values).0;
+            if values.len() != 0 {
+                let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
+                match sqlx::query("DELETE FROM belong WHERE user_id = ?;").bind(values[0].0)
+                    .execute(&mut *begin).await {
+                    Ok(_) => {}
+                    Err(err) => {
+                        error!("sqlx::error={:?}",err);
+                        return;
+                    }
+                };
+                for value in values {
+                    match sqlx::query("INSERT belong(user_id, card_id, unique_id, amount, protected) VALUES (?, ?, ?, ?, ?);")
+                        .bind(value.0).bind(value.1).bind(value.2).bind(value.3).bind(value.4)
+                        .execute(&mut *begin).await {
+                        Ok(_) => {}
+                        Err(err) => {
+                            error!("sqlx::error={:?}",err);
+                            continue;
+                        }
+                    };
+                }
+                begin.commit().await.unwrap();
+            }
+        }
+        // future::join_all(futures).await;
         // break;
     }
 }
@@ -244,30 +270,29 @@ async fn update_cards() {
 
 
 #[tracing::instrument(skip(semaphore, suspend))]
-async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Semaphore>, suspend: Duration) {
+async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Semaphore>, suspend: Duration) -> Vec<(i64, i64, bool, i64, u64)> {
     let _permit = semaphore.acquire().await.unwrap();
     if user_id % 1000 == 0 || enabled!(Level::DEBUG) { info!("start updating card affiliation: {}...",user_id); }
 
     let chunk_size = 25;
     let client = generate_client(false).await;
 
-    let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
+    // let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
     // sqlx::query("TRUNCATE TABLE cards;").execute(&mut *begin).await.unwrap();
-    if sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM belong WHERE user_id = ?;").bind(user_id).fetch_one(DATABASE_POOL.get().unwrap()).await.unwrap().0 != 0 {
-        sqlx::query("SELECT * FROM belong WHERE user_id = ? FOR UPDATE;").bind(user_id)
-            .execute(&mut *begin).await.unwrap();
-    }
-    begin.commit().await.unwrap();
-    let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
+    // if sqlx::query_as::<_, (i64,)>("SELECT COUNT(*) FROM belong WHERE user_id = ?;").bind(user_id).fetch_one(DATABASE_POOL.get().unwrap()).await.unwrap().0 != 0 {
+    //     sqlx::query("SELECT * FROM belong WHERE user_id = ? FOR UPDATE;").bind(user_id)
+    //         .execute(&mut *begin).await.unwrap();
+    // }
 
-    match sqlx::query("DELETE FROM belong WHERE user_id = ?;").bind(user_id)
-        .execute(&mut *begin).await {
-        Ok(_) => {}
-        Err(err) => {
-            error!("sqlx::error={:?}",err);
-            return;
-        }
-    };
+    // match sqlx::query("DELETE FROM belong WHERE user_id = ?;").bind(user_id)
+    //     .execute(&mut *begin).await {
+    //     Ok(_) => {}
+    //     Err(err) => {
+    //         error!("sqlx::error={:?}",err);
+    //         return;
+    //     }
+    // };
+    let mut hold_cards = vec![];
 
     for card_type in ["memorial", "non_memorial"] {
         // for rarity in 1..=5 {
@@ -291,7 +316,7 @@ async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Se
             let card_array = match resp.as_array() {
                 None => {
                     error!("resp={:?}",resp);
-                    return;
+                    return vec![];
                 }
                 Some(x) => { x }
             };
@@ -332,28 +357,30 @@ async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Se
                 debug!("\tis_protected: {}", is_protected);
                 debug!("\tunique_id: {}", unique_id);
                 debug!("\tamount: {}", amount);
+                hold_cards.push((user_id, card_id, is_protected, unique_id, amount));
 
 
-                match sqlx::query("INSERT belong(user_id, card_id, unique_id, amount, protected) VALUES(?, ?, ?, ?, ?);")
-                    .bind(user_id).bind(card_id).bind(unique_id).bind(amount).bind(is_protected)
-                    .execute(&mut *begin).await {
-                    Ok(_) => {}
-                    Err(err) => {
-                        error!("sqlx::error={:?}",err);
-                        continue;
-                    }
-                };
+                // match sqlx::query("INSERT belong(user_id, card_id, unique_id, amount, protected) VALUES(?, ?, ?, ?, ?);")
+                //     .bind(user_id).bind(card_id).bind(unique_id).bind(amount).bind(is_protected)
+                //     .execute(&mut *begin).await {
+                //     Ok(_) => {}
+                //     Err(err) => {
+                //         error!("sqlx::error={:?}",err);
+                //         continue;
+                //     }
+                // };
             }
             page += 1;
             if card_array.len() != chunk_size { break; }
         }
         // }
     }
-    begin.commit().await.unwrap();
+    // begin.commit().await.unwrap();
 
     if enabled!(Level::DEBUG) {
         info!("end updating card affiliation: {}...",user_id);
     };
+    hold_cards
 }
 
 async fn list_users() -> Vec<(i64, String)> {
