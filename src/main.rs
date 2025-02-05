@@ -51,7 +51,7 @@ async fn main() {
         update_cardpacks().await;
         update_cards().await;
 
-        let semaphore = Arc::new(Semaphore::new(4));
+        let semaphore = Arc::new(Semaphore::new(7));
         let suspend = Duration::new(0, 5e+7 as u32);
         let joiner = list_users().await.into_iter().map(|(id, screen_name)| {
             update_card_belong(id, screen_name.clone(), semaphore.clone(), suspend)
@@ -155,6 +155,7 @@ async fn update_cardpacks() {
 
     let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
     // sqlx::query("TRUNCATE TABLE cardpacks").execute(&mut *begin).await.unwrap();
+    let mut progress_bar = tqdm!();
 
     let mut page = 1;
     loop {
@@ -190,6 +191,7 @@ async fn update_cardpacks() {
                         .bind(cardpack_id).bind(card_id).execute(&mut *begin).await.unwrap();
                 }
                 page += 1;
+                progress_bar.update(1).unwrap();
                 if card_array.len() != chunk_size { break; }
             }
         }
@@ -206,6 +208,7 @@ async fn update_cards() {
     let chunk_size = 25;
     let client = generate_client(false).await;
     let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
+    let mut progress_bar = tqdm!();
 
     for card_type in ["memorial", "non_memorial"] {
         for rarity in 1..=5 {
@@ -265,6 +268,7 @@ async fn update_cards() {
                         }
                         _ => unreachable!()
                     }
+                    progress_bar.update(1).unwrap();
                 }
                 page += 1;
                 if card_array.len() != chunk_size { break; }
