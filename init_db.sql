@@ -50,16 +50,17 @@ CREATE INDEX IF NOT EXISTS idx_cards_character_id_memorial ON cards (memorial, r
 
 CREATE TABLE IF NOT EXISTS belong
 (
-    user_id   INT PRIMARY KEY,
+    user_id   INT,
     card_id   INT          NOT NULL,
     unique_id INT          NOT NULL,
     amount    INT UNSIGNED NOT NULL,
-    protected BOOL         NOT NULL
+    protected BOOL         NOT NULL,
+    PRIMARY KEY (user_id, card_id)
 #     ,FOREIGN KEY fk_user_id (user_id) REFERENCES orical_user (user_id) ON DELETE CASCADE ON UPDATE CASCADE
 #     ,FOREIGN KEY fk_card_id (card_id) REFERENCES cards (card_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_belong_user_id ON belong (user_id);
-CREATE INDEX IF NOT EXISTS idx_belong_user_card_id ON belong (user_id, card_id);
+# CREATE INDEX IF NOT EXISTS idx_belong_user_card_id ON belong (user_id, card_id);
 
 CREATE TABLE IF NOT EXISTS cardpack_belong
 (
