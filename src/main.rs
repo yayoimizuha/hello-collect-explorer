@@ -36,6 +36,7 @@ async fn main() {
         "SELECT INDEX_NAME, TABLE_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = 'hello_collect_explorer' AND INDEX_NAME != 'PRIMARY';"
     ).fetch_all(DATABASE_POOL.get().unwrap()).await.unwrap() {
         sqlx::query(format!("DROP INDEX {index_name} ON {table_name};").as_str()).execute(DATABASE_POOL.get().unwrap()).await.unwrap();
+        println!("{}", format!("DROP INDEX {index_name} ON {table_name};"));
     }
 
     for query in include_str!("../init_db.sql").strip_suffix(";").unwrap().split(';') {
