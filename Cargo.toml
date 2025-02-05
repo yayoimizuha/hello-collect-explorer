@@ -17,7 +17,7 @@ chrono = { version = "0.4.39", features = ["default"] }
 tracing = { version = "0.1.41", features = ["default"] }
 tracing-subscriber = { version = "0.3.19", features = ["default", "env-filter"] }
 sqlx = { version = "0.8.3", features = ["mysql", "default", "runtime-tokio", "chrono"] }
-futures = { version = "0.3.31", features = ["default"] }
+kdam = { version = "*" }
 
 [profile.relwithdebinfo]
 inherits = "release"

@@ -4,6 +4,7 @@ use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 use chrono::DateTime;
+use kdam::{tqdm, BarExt};
 use once_cell::sync::Lazy;
 use tokio::sync::{OnceCell, Semaphore};
 use serde_json::Value;
@@ -55,8 +56,11 @@ async fn main() {
         let joiner = list_users().await.into_iter().map(|(id, screen_name)| {
             update_card_belong(id, screen_name.clone(), semaphore.clone(), suspend)
         }).collect::<Vec<_>>();
+
+        let mut progress_bar = tqdm!(total=joiner.len());
         for a_values in joiner {
             let values = join!(a_values).0;
+            progress_bar.update(1).unwrap();
             if values.len() != 0 {
                 let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
                 match sqlx::query("DELETE FROM belong WHERE user_id = ?;").bind(values[0].0)
@@ -114,9 +118,12 @@ async fn update_orical_user() {
     // let all_users_count = 5000_i64;
     let mut begin = DATABASE_POOL.get().unwrap().begin().await.unwrap();
     sqlx::query("TRUNCATE TABLE orical_user").execute(&mut *begin).await.unwrap();
+    let mut progress_bar = tqdm!(total=all_users_count as usize);
+
     for i in 1..=(all_users_count as f64 / chunk_size as f64).ceil() as i32 {
         for person_data in client.get(format!("https://api-helloproject.orical.jp/partners/{PARTNER_ID}/ranking/top100?page={i}&per={chunk_size}")).send().await.unwrap().json::<Value>().await.unwrap()["rankings"].as_array().unwrap() {
             // debug!("Rank: {person_data}");
+            progress_bar.update(1).unwrap();
             let rank = person_data["rank"].as_i64().unwrap();
             let screen_name = person_data["partner_user"]["screen_name"].as_str().unwrap();
             let user_id = person_data["partner_user"]["user_id"].as_i64().unwrap();
