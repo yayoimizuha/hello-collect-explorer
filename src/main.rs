@@ -52,7 +52,7 @@ async fn main() {
         update_cards().await;
 
         let semaphore = Arc::new(Semaphore::new(7));
-        let suspend = Duration::new(0, 5e+7 as u32);
+        let suspend = Duration::new(0, 0);
         let joiner = list_users().await.into_iter().map(|(id, screen_name)| {
             update_card_belong(id, screen_name.clone(), semaphore.clone(), suspend)
         }).collect::<Vec<_>>();
