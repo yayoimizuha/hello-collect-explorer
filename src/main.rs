@@ -283,7 +283,7 @@ async fn update_cards() {
 #[tracing::instrument(skip(semaphore, suspend))]
 async fn update_card_belong(user_id: i64, screen_name: String, semaphore: Arc<Semaphore>, suspend: Duration) -> Vec<(i64, i64, i64, u64, bool)> {
     let _permit = semaphore.acquire().await.unwrap();
-    if user_id % 1000 == 0 || enabled!(Level::DEBUG) { info!("start updating card affiliation: {}...",user_id); }
+    // if user_id % 1000 == 0 || enabled!(Level::DEBUG) { info!("start updating card affiliation: {}...",user_id); }
 
     let chunk_size = 25;
     let client = generate_client(false).await;
